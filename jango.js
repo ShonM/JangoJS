@@ -2,6 +2,7 @@ var phantom     = require('node-phantom'),
     utils       = require('./utils.js'),
     clc         = require('cli-color'),
     async       = require('async'),
+    _ =         require('lodash'),
     q           = require('q');
 
 function Jango () {
@@ -68,10 +69,10 @@ Jango.prototype.promise = function promise (name, timeout) {
     }
 
     if (! isNaN(parseFloat(timeout)) && isFinite(timeout)) {
-        setTimeout(function () {
+        setTimeout(_.bind(function () {
             this.out('Promise ' + name + ' timed out and resolved', 1, 'warning');
             this.resolve(name);
-        }.bind(this), timeout);
+        }, this), timeout);
     }
 
     return this.promises.push(deferred.promise);
@@ -81,51 +82,51 @@ Jango.prototype.promise = function promise (name, timeout) {
     // deferred.name  = name;
     // this.promises[name] = deferred.promise;
 
-    // deferred.promise.then(function (deferred) {
+    // deferred.promise.then(_.bind(function (deferred) {
     //     delete this.promises[deferred.name];
-    // }.bind(this, deferred));
+    // }, this, deferred)));
 }
 
 Jango.prototype.boot = function boot (callback) {
     this.out('Boot ' + arguments.callee.caller.name, 1, 'info');
 
-    return phantom.create(this.opts.phantom, function _phantomCreate (error, phantom) {
+    return phantom.create(this.opts.phantom, _.bind(function _phantomCreate (error, phantom) {
         this.phantom = phantom;
 
-        phantom.createPage(function _phantomCreatePage (error, page) {
+        phantom.createPage(_.bind(function _phantomCreatePage (error, page) {
             this.page = page;
 
-            page.onResourceReceived = function _onResourceReceived (resource) {
+            page.onResourceReceived = _.bind(function _onResourceReceived (resource) {
                 if (resource.stage !== 'end' || resource.url !== this.requestUrl) {
                     return;
                 } else if (typeof resource == 'object' && /^http/i.test(resource.url)) {
                     this.response = resource;
                 }
-            }.bind(this);
+            }, this);
 
-            page.onNavigationRequested = function _onNavigationRequested (url, type, locked, isMainFrame) {
+            page.onNavigationRequested = _.bind(function _onNavigationRequested (url, type, locked, isMainFrame) {
                 if (isMainFrame) {
                     this.promise('navigating');
                 }
-            }.bind(this);
+            }, this);
 
-            page.onUrlChanged = function _onUrlChanged (url) {
+            page.onUrlChanged = _.bind(function _onUrlChanged (url) {
                 this.resolve('navigating');
-            }.bind(this);
+            }, this);
 
-            page.onLoadStarted = function _onLoadStarted () {
+            page.onLoadStarted = _.bind(function _onLoadStarted () {
                 this.promise('loading');
-            }.bind(this);
+            }, this);
 
-            page.onLoadFinished = function _onLoadFinished (status) {
+            page.onLoadFinished = _.bind(function _onLoadFinished (status) {
                 this.resolve('loading');
-            }.bind(this);
+            }, this);
 
             if (utils.callable(callback)) {
                 callback.call(this, phantom);
             }
-        }.bind(this));
-    }.bind(this));
+        }, this));
+    }, this));
 }
 
 Jango.prototype.then = function then (step) {
@@ -141,9 +142,9 @@ Jango.prototype.then = function then (step) {
 Jango.prototype.wait = function wait (on, callback, timeout) {
     this.out('Wait ' + arguments.callee.caller.name, 3, 'debug');
 
-    return this.then(function _wait () {
+    return this.then(_.bind(function _wait () {
         var waiting = q.defer();
-            _clearWait = function _clearWait () {
+            _clearWait = _.bind(function _clearWait () {
                 if (utils.callable(callback) !== null) {
                     callback.call(this);
                 }
@@ -151,7 +152,7 @@ Jango.prototype.wait = function wait (on, callback, timeout) {
                 clearInterval(this.waitInterval);
                 clearTimeout(this.waitTimeout);
                 waiting.resolve();
-            }.bind(this);
+            }, this);
 
         this.promises.push(waiting.promise);
 
@@ -167,57 +168,57 @@ Jango.prototype.wait = function wait (on, callback, timeout) {
             timeout = on;
         }
 
-        this.waitTimeout = setTimeout(function _waitTimeout () {
+        this.waitTimeout = setTimeout(_.bind(function _waitTimeout () {
             if (utils.callable(on)) {
                 this.out('Wait ' + on.name + ' timed out', 1, 'warning');
             }
 
             _clearWait();
-        }.bind(this), timeout);
-    }.bind(this));
+        }, this), timeout);
+    }, this));
 }
 
 Jango.prototype.open = function open (url, callback) {
     this.out('Open ' + arguments.callee.caller.name, 3, 'debug');
 
-    return this.then(function _openThen () {
+    return this.then(_.bind(function _openThen () {
         this.requestUrl = url;
         this.promise('loading');
 
-        this.page.open(url, function _pageOpen (error, status) {
+        this.page.open(url, _.bind(function _pageOpen (error, status) {
             this.page.onLoadFinished(status);
 
             if (utils.callable(callback)) {
                 callback.call(this, this.response, error, status);
             }
-        }.bind(this));
-    });
+        }, this));
+    }, this));
 }
 
 Jango.prototype.evaluate = function evaluate (method, callback) {
     this.out('Evaluate ' + arguments.callee.caller.name, 3, 'debug');
 
-    return this.then(function _evaluateThen () {
+    return this.then(_.bind(function _evaluateThen () {
         var evaluating = q.defer();
         this.promises.push(evaluating.promise);
 
-        this.page.evaluate(method, function _callback (callback, error, value) {
+        this.page.evaluate(method, _.bind(function _callback (callback, error, value) {
             if (utils.callable(callback)) {
                 callback.call(this, error, value);
             }
 
             evaluating.resolve();
-        }.bind(this, callback));
-    }.bind(this));
+        }, this, callback));
+    }, this));
 }
 
 Jango.prototype.run = function run (callback) {
     this.out('Run ' + this.steps.length + ' steps ' + arguments.callee.caller.name, 3, 'debug');
 
-    this.boot(function _boot () {
+    this.boot(_.bind(function _boot () {
         async.forEachSeries(
             this.steps,
-            function _stepsForEach (step, callback) {
+            _.bind(function _stepsForEach (step, callback) {
                 var before = this.promises.length
                 this.step++;
 
@@ -225,19 +226,19 @@ Jango.prototype.run = function run (callback) {
                 step.call(this);
                 this.out('Wait for ' + (this.promises.length - before) + ' new promise(s)', 2, 'info');
 
-                q.allResolved(this.promises).then(function _allResolved (callback) {
+                q.allResolved(this.promises).then(_.bind(function _allResolved (callback) {
                     // this.out('Step ' + this.step + ' - promises resolved', 3, 'debug');
 
                     callback();
-                }.bind(this, callback));
-            }.bind(this),
-            function _stepsComplete () {
+                }, this, callback));
+            }, this),
+            _.bind(function _stepsComplete () {
                 if (utils.callable(callback)) {
                     callback.call(this);
                 }
-            }.bind(this)
+            }, this)
         );
-    }.bind(this));
+    }, this));
 }
 
 Jango.prototype.exit = function exit (code, callback) {

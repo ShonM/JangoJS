@@ -16,7 +16,8 @@
     "cli-color": "~0.2.1",
     "memoizee": "~0.2.3",
     "es5-ext": "~0.9.1",
-    "socket.io": "~0.9.13"
+    "socket.io": "~0.9.13",
+    "lodash": "~1.0.0-rc.3"
   },
   "devDependencies": {},
   "optionalDependencies": {},

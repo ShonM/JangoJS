@@ -13,15 +13,15 @@ jango.options({
 });
 
 jango.open('http://www.google.com/', function open (response, error, status) {
-    console.log(response.url, status);
+    console.log('First output', response.url, status);
 });
 
 jango.then(function before () {
     console.log('Before');
 
-    // Will run right away
+    // Will run right away since we've already started
     this.then(function hurr () {
-        console.log('Hurr');
+        this.out('Hello from outside Jango :P', 1, 'success');
     });
 });
 

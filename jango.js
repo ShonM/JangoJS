@@ -42,6 +42,8 @@ Jango.prototype.options = function opts (opts) {
 }
 
 Jango.prototype.out = function out (message, level, type) {
+    level = level || 3;
+
     if (level <= this.argv.level) {
         type = type || 'debug';
 
@@ -49,8 +51,14 @@ Jango.prototype.out = function out (message, level, type) {
     }
 }
 
+Jango.prototype.call = function call (callback) {
+    if (utils.callable(callback)) {
+        callback.apply(this, Array.prototype.slice.call(arguments, 1));
+    }
+}
+
 Jango.prototype.resolve = function resolve (name) {
-    this.out('Resolve ' + name + ' from ' + arguments.callee.caller.name, 3, 'debug');
+    this.out('Resolve ' + name + ' from ' + arguments.callee.caller.name);
 
     deferred = this[name];
 
@@ -60,7 +68,7 @@ Jango.prototype.resolve = function resolve (name) {
 }
 
 Jango.prototype.promise = function promise (name, timeout) {
-    this.out('Promise ' + name + ' from ' + arguments.callee.caller.name, 3, 'debug');
+    this.out('Promise ' + name + ' from ' + arguments.callee.caller.name);
 
     deferred = this[name];
 
@@ -88,12 +96,16 @@ Jango.prototype.promise = function promise (name, timeout) {
 }
 
 Jango.prototype.boot = function boot (callback) {
-    this.out('Boot ' + arguments.callee.caller.name, 1, 'info');
+    this.out('Booting', 1, 'info');
 
     return phantom.create(this.opts.phantom, _.bind(function _phantomCreate (error, phantom) {
+        this.out('Got Phantom', 2, 'info');
+
         this.phantom = phantom;
 
         phantom.createPage(_.bind(function _phantomCreatePage (error, page) {
+            this.out('Got Page', 2, 'info');
+
             this.page = page;
 
             page.onResourceReceived = _.bind(function _onResourceReceived (resource) {
@@ -122,15 +134,13 @@ Jango.prototype.boot = function boot (callback) {
                 this.resolve('loading');
             }, this);
 
-            if (utils.callable(callback)) {
-                callback.call(this, phantom);
-            }
+            this.call(callback, phantom);
         }, this));
     }, this));
 }
 
 Jango.prototype.then = function then (step) {
-    this.out('Then ' + arguments.callee.caller.name, 3, 'debug');
+    this.out('Then ' + arguments.callee.caller.name);
 
     if (this.step) {
         return this.steps.splice(this.step, 0, step);
@@ -140,14 +150,12 @@ Jango.prototype.then = function then (step) {
 }
 
 Jango.prototype.wait = function wait (on, callback, timeout) {
-    this.out('Wait ' + arguments.callee.caller.name, 3, 'debug');
+    this.out('Wait ' + arguments.callee.caller.name);
 
     return this.then(_.bind(function _wait () {
         var waiting = q.defer();
             _clearWait = _.bind(function _clearWait () {
-                if (utils.callable(callback) !== null) {
-                    callback.call(this);
-                }
+                this.call(callback);
 
                 clearInterval(this.waitInterval);
                 clearTimeout(this.waitTimeout);
@@ -179,7 +187,7 @@ Jango.prototype.wait = function wait (on, callback, timeout) {
 }
 
 Jango.prototype.open = function open (url, callback) {
-    this.out('Open ' + arguments.callee.caller.name, 3, 'debug');
+    this.out('Open ' + arguments.callee.caller.name);
 
     return this.then(_.bind(function _openThen () {
         this.requestUrl = url;
@@ -188,24 +196,20 @@ Jango.prototype.open = function open (url, callback) {
         this.page.open(url, _.bind(function _pageOpen (error, status) {
             this.page.onLoadFinished(status);
 
-            if (utils.callable(callback)) {
-                callback.call(this, this.response, error, status);
-            }
+            this.call(callback, this.response, error, status);
         }, this));
     }, this));
 }
 
 Jango.prototype.evaluate = function evaluate (method, callback) {
-    this.out('Evaluate ' + arguments.callee.caller.name, 3, 'debug');
+    this.out('Evaluate ' + arguments.callee.caller.name);
 
     return this.then(_.bind(function _evaluateThen () {
         var evaluating = q.defer();
         this.promises.push(evaluating.promise);
 
         this.page.evaluate(method, _.bind(function _callback (callback, error, value) {
-            if (utils.callable(callback)) {
-                callback.call(this, error, value);
-            }
+            this.call(callback, error, value);
 
             evaluating.resolve();
         }, this, callback));
@@ -213,29 +217,29 @@ Jango.prototype.evaluate = function evaluate (method, callback) {
 }
 
 Jango.prototype.run = function run (callback) {
-    this.out('Run ' + this.steps.length + ' steps ' + arguments.callee.caller.name, 3, 'debug');
+    this.out('Run ' + this.steps.length + ' steps ' + arguments.callee.caller.name);
 
     this.boot(_.bind(function _boot () {
+        this.out('Go time', 2, 'success');
+
         async.forEachSeries(
             this.steps,
             _.bind(function _stepsForEach (step, callback) {
                 var before = this.promises.length
                 this.step++;
 
-                this.out('On step ' + this.step + ' (' + step.name + ')', 3, 'debug');
+                this.out('On step ' + this.step, 2, 'info');
                 step.call(this);
-                this.out('Wait for ' + (this.promises.length - before) + ' new promise(s)', 2, 'info');
+                this.out('Wait for ' + (this.promises.length - before) + ' new promise(s)');
 
                 q.allResolved(this.promises).then(_.bind(function _allResolved (callback) {
-                    // this.out('Step ' + this.step + ' - promises resolved', 3, 'debug');
+                    // this.out('Step ' + this.step + ' - promises resolved');
 
                     callback();
                 }, this, callback));
             }, this),
             _.bind(function _stepsComplete () {
-                if (utils.callable(callback)) {
-                    callback.call(this);
-                }
+                this.call(callback);
             }, this)
         );
     }, this));
@@ -244,9 +248,7 @@ Jango.prototype.run = function run (callback) {
 Jango.prototype.exit = function exit (code, callback) {
     this.phantom.exit(code);
 
-    if (utils.callable(callback)) {
-        callback.call(this);
-    }
+    this.call(callback);
 }
 
 module.exports = new Jango;

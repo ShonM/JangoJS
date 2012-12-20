@@ -5,7 +5,6 @@ var jango = require('./jango.js'),
 console.log('Start');
 
 jango.options({
-    logLevel: 3,
     phantom: {
         'ignore-ssl-errors': 'yes',
         'cookies-file': 'cookies.txt',

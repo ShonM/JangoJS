@@ -5,11 +5,14 @@ var phantom     = require('node-phantom'),
     q           = require('q');
 
 function Jango () {
+    this.argv = require('optimist')
+        .alias('l', 'level').default('level', 0)
+        .argv;
+
     this.step       = 0;
     this.steps      = [];
     this.promises   = [];
     this.opts       = {
-        logLevel: 0,
         phantom: {
             'load-images': 'no'
         }
@@ -38,7 +41,7 @@ Jango.prototype.options = function opts (opts) {
 }
 
 Jango.prototype.out = function out (message, level, type) {
-    if (level <= this.opts.logLevel) {
+    if (level <= this.argv.level) {
         type = type || 'debug';
 
         console.log(this.levels[type]('Jango: ') + message);

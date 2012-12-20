@@ -3,7 +3,7 @@
     "name": "Shon M"
   },
   "name": "jango",
-  "description": "A simple wrapper around node-phantom in the same style as CasperJS",
+  "description": "A lightweight wrapper around node-phantom something like CasperJS",
   "version": "0.0.1",
   "homepage": "https://github.com/ShonM/jango",
   "repository": {

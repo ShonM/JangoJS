@@ -1,5 +1,5 @@
 var phantom     = require('node-phantom'),
-    utils       = require('utils.js'),
+    utils       = require('./utils.js'),
     clc         = require('cli-color'),
     async       = require('async'),
     q           = require('q');

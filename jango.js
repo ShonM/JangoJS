@@ -84,15 +84,6 @@ Jango.prototype.promise = function promise (name, timeout) {
     }
 
     return this.promises.push(deferred.promise);
-
-    // Below does not work
-
-    // deferred.name  = name;
-    // this.promises[name] = deferred.promise;
-
-    // deferred.promise.then(_.bind(function (deferred) {
-    //     delete this.promises[deferred.name];
-    // }, this, deferred)));
 }
 
 Jango.prototype.boot = function boot (callback) {
@@ -116,8 +107,13 @@ Jango.prototype.boot = function boot (callback) {
                 }
             }, this);
 
-            page.onNavigationRequested = _.bind(function _onNavigationRequested (url, type, locked, isMainFrame) {
-                if (isMainFrame) {
+            page.onNavigationRequested = _.bind(function _onNavigationRequested (request) {
+                var url = request[0];
+                    type = request[1];
+                    locked = request[2];
+                    main = request[3];
+
+                if (main) {
                     this.promise('navigating');
                 }
             }, this);
@@ -243,6 +239,8 @@ Jango.prototype.run = function run (callback) {
                 }, this, callback));
             }, this),
             _.bind(function _stepsComplete () {
+                this.out('Finished', 2, 'success');
+
                 this.call(callback);
             }, this)
         );

@@ -98,7 +98,7 @@ Jango.prototype.promise = function promise (name, timeout) {
 Jango.prototype.boot = function boot (callback) {
     this.out('Booting', 1, 'info');
 
-    return phantom.create(this.opts.phantom, _.bind(function _phantomCreate (error, phantom) {
+    return phantom.create({phantomjs: this.opts.phantom}, _.bind(function _phantomCreate (error, phantom) {
         this.out('Got Phantom', 2, 'info');
 
         this.phantom = phantom;

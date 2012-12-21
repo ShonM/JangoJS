@@ -219,6 +219,10 @@ Jango.prototype.evaluate = function evaluate (method, callback) {
 Jango.prototype.run = function run (callback) {
     this.out('Run ' + this.steps.length + ' steps ' + arguments.callee.caller.name);
 
+    callback = callback || _.bind(function () {
+        this.exit(1);
+    }, this);
+
     this.boot(_.bind(function _boot () {
         this.out('Go time', 2, 'success');
 

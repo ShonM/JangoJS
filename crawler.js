@@ -32,8 +32,8 @@ jango.evaluate(function evaluate () {
     that.title = value;
 });
 
-jango.wait(100, function wait () {
-    console.log('Waited 100ms');
+jango.wait(5000, function wait () {
+    console.log('Waited 5s!');
 });
 
 jango.then(function after () {

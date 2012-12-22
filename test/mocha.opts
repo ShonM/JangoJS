@@ -1,0 +1,4 @@
+--globals location
+--require should
+--reporter spec
+--ui bdd

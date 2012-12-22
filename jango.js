@@ -1,5 +1,5 @@
 var phantom     = require('node-phantom'),
-    utils       = require('./utils.js'),
+    utils       = require('./utils'),
     clc         = require('cli-color'),
     events      = require('events'),
     async       = require('async'),
@@ -33,47 +33,65 @@ function Jango () {
     };
 }
 
+// Jango is one bigass event emitter
 Jango.prototype = new events.EventEmitter;
 
-Jango.prototype.options = function opts (opts) {
-    return this.opts = utils.extend({}, this.opts, opts);
+// Smashes together the defaults plus whatever you give it
+Jango.prototype.options = function opts (options) {
+    return this.opts = utils.extend({}, this.opts, options);
 }
 
+// If level is > this.level, output message with style
 Jango.prototype.out = function out (message, level, style) {
     level = level || 3;
 
     if (level <= this.argv.level) {
         style = style || 'debug';
 
-        console.log(this.styles[style]('Jango: ') + message);
+        return console.log(this.styles[style]('Jango: ') + message);
     }
+
+    return false;
 }
 
 // Shorthand: If callable, acts like callback.call(this, [args, ...])
 Jango.prototype.call = function call (callback) {
     if (utils.callable(callback)) {
-        callback.apply(this, Array.prototype.slice.call(arguments, 1));
+        return callback.apply(this, Array.prototype.slice.call(arguments, 1));
     }
+
+    return false;
 }
 
+// Boots a Phantom instance and creates a page, hooking up some events
 Jango.prototype.boot = function boot (callback) {
     this.out('Booting', 1, 'info');
 
-    return phantom.create({phantomjs: this.opts.phantom}, _.bind(function _phantomCreate (error, phantom) {
-        this.out('Got Phantom', 2, 'info');
+    var defer = q.defer();
 
+    // Create a new Phantom instance with the specified options
+    phantom.create({phantomjs: this.opts.phantom}, _.bind(function _phantomCreate (error, phantom) {
         if (error) {
+            defer.reject('Phantom error: ' + error);
             this.out('Phantom error: ' + error, 0, 'error');
             this.exit();
         }
 
+        this.out('Got Phantom', 2, 'info');
         this.phantom = phantom;
 
+        // Create a Phantom page
         phantom.createPage(_.bind(function _phantomCreatePage (error, page) {
-            this.out('Got Page', 2, 'info');
+            if (error) {
+                defer.reject('Phantom error: ' + error);
+                this.out('Phantom error: ' + error, 0, 'error');
+                this.exit();
+            }
 
+            this.out('Got Page', 2, 'info');
             this.page = page;
 
+            // Invoked when the a resource requested by the page is received
             page.onResourceReceived = _.bind(function _onResourceReceived (resource) {
                 if (resource.stage !== 'end' || resource.url !== this.requestUrl) {
                     return;
@@ -82,89 +100,130 @@ Jango.prototype.boot = function boot (callback) {
                 }
             }, this);
 
+            // Invoked when a navigation event happens
             page.onNavigationRequested = _.bind(function _onNavigationRequested (request) {
                 var url = request[0];
                     type = request[1];
                     locked = request[2];
                     main = request[3];
 
+                // Whenever the current request is a main frame request
                 if (main) {
+                    var deferred = q.defer();
 
+                    // Resolve this deferred when the URL is changed (the navigation request is fulfilled - NOT loading complete!)
+                    this.once('onUrlChanged', function () {
+                        this.out('Resolved: onNavigationRequested', 5, 'debug');
+                        deferred.resolve();
+                    });
+
+                    this.out('Promised: onNavigationRequested', 5, 'debug')
+                    this.promises.push(deferred.promise);
                 }
             }, this);
 
+            // Invoked when the URL changes, e.g. as it navigates away from the current URL
             page.onUrlChanged = _.bind(function _onUrlChanged (url) {
                 this.out('Emit onUrlChanged', 5, 'debug');
                 this.emit('onUrlChanged', url);
-            }, this);
 
-            page.onLoadStarted = _.bind(function _onLoadStarted () {
-                var p = q.defer();
+                var deferred = q.defer();
 
+                // Resolve this deferred when loading is finished
                 this.once('onLoadFinished', function () {
-                    this.out('onLoadStarted promise resolving due to event', 5, 'debug');
-
-                    p.resolve();
+                    this.out('Resolved: onUrlChanged', 5, 'debug');
+                    deferred.resolve();
                 });
 
-                this.out('onLoadStarted promised', 5, 'debug')
-                this.promises.push(p.promise);
+                this.out('Promised: onUrlChanged', 5, 'debug')
+                this.promises.push(deferred.promise);
             }, this);
 
+            // Invoked when the page starts the loading
+            page.onLoadStarted = _.bind(function _onLoadStarted () {
+                var deferred = q.defer();
+
+                // Resolve this deferred when loading is finished
+                this.once('onLoadFinished', function () {
+                    this.out('Resolved: onLoadStarted', 5, 'debug');
+                    deferred.resolve();
+                });
+
+                this.out('Promised: onLoadStarted', 5, 'debug')
+                this.promises.push(deferred.promise);
+            }, this);
+
+            // Invoked when the page finishes the loading
             page.onLoadFinished = _.bind(function _onLoadFinished (status) {
                 this.out('Emit onLoadFinished', 5, 'debug');
                 this.emit('onLoadFinished', status);
             }, this);
 
-            page.onConsoleMessage = function _onConsoleMessage (message, line, source) {
+            // Invoked when there is a JavaScript console message on the web page
+            page.onConsoleMessage = _.bind(function _onConsoleMessage (message, line, source) {
                 this.out('Emit onConsoleMessage', 5, 'debug');
                 this.emit('onConsoleMessage', message, line, source);
-            };
+            }, this);
 
             this.call(callback, phantom);
+
+            defer.resolve();
         }, this));
     }, this));
+
+    return defer.promise;
 }
 
+// Pushes a step onto the step queue
 Jango.prototype.then = function then (step) {
-    this.out('Then ' + arguments.callee.caller.name);
+    this.out('Then ' + arguments.callee.caller.name, 5);
 
-    // if (this.phantom) {
-    //     return this.steps.splice(this.step, 0, step);
-    // }
+    // If we have a phantom instance (aka we have booted) we will "inject" this step
+    if (this.phantom) {
+        return this.steps.splice(this.step, 0, step);
+    }
 
     return this.steps.push(step);
 }
 
+// then() wrapper to wait for a duration or for a callable to return truthy
 Jango.prototype.wait = function wait (on, callback, timeout) {
-    this.out('Wait ' + arguments.callee.caller.name);
+    this.out('Wait ' + arguments.callee.caller.name, 5);
 
-    return this.then(_.bind(function _wait () {
-        var p = q.defer();
-        this.promises.push(p.promise);
-        this.out('Wait promised', 5, 'debug');
+    var defer = q.defer();
 
+    this.then(_.bind(function _wait () {
+        var deferred = q.defer();
+        this.promises.push(deferred.promise);
+        this.out('Promised: Wait', 5, 'debug');
+
+        // The method that's going to be called to clean this mess up
         var _clearWait = _.bind(function _clearWait () {
                 this.call(callback);
 
                 clearInterval(this.waitInterval);
                 clearTimeout(this.waitTimeout);
 
-                p.resolve();
+                this.out('Resolved: Wait', 5, 'debug');
+                deferred.resolve();
+                defer.resolve();
             }, this);
 
         if (utils.callable(on)) {
             this.waitOn = on;
 
+            // Run until on returns truthy, then clear the wait (negates the timeout below)
             this.waitInterval = setInterval(function _waitInterval (jango) {
                 if (jango.waitOn()) {
                     _clearWait();
                 }
             }, 100, this);
         } else if (! isNaN(parseFloat(on)) && isFinite(on)) {
+            // An integer as on will move it over to timeout instead
             timeout = on;
         }
 
+        // Set a timeout that will clear the wait
         this.waitTimeout = setTimeout(_.bind(function _waitTimeout () {
             if (utils.callable(on)) {
                 this.out('Wait ' + on.name + ' timed out', 1, 'warning');
@@ -173,78 +232,95 @@ Jango.prototype.wait = function wait (on, callback, timeout) {
             _clearWait();
         }, this), timeout);
     }, this));
+
+    return defer.promise;
 }
 
+// then() wrapper that will open a page
 Jango.prototype.open = function open (url, callback) {
-    this.out('Open ' + arguments.callee.caller.name);
+    this.out('Open ' + arguments.callee.caller.name, 5);
 
-    return this.then(_.bind(function _openThen () {
+    var defer = q.defer();
+
+    this.then(_.bind(function _openThen () {
         this.requestUrl = url;
 
-        var p = q.defer();
-        this.promises.push(p.promise);
-        this.out('Open promised', 5, 'debug');
+        var deferred = q.defer();
+        this.promises.push(deferred.promise);
+        this.out('Promised: Open', 5, 'debug');
 
         this.page.open(url, _.bind(function _pageOpen (error, status) {
             this.page.onLoadFinished(status);
 
-            p.resolve();
-
             this.call(callback, this.response, error, status);
+
+            this.out('Resolved: Open', 5, 'debug');
+            deferred.resolve();
+            defer.resolve();
         }, this));
     }, this));
+
+    return defer.promise;
 }
 
 Jango.prototype.evaluate = function evaluate (method, callback) {
-    this.out('Evaluate ' + arguments.callee.caller.name);
+    this.out('Evaluate ' + arguments.callee.caller.name, 5);
 
-    return this.then(_.bind(function _evaluateThen () {
-        var p = q.defer();
-        this.promises.push(p.promise);
-        this.out('Evaluate promised', 5, 'debug');
+    var defer = q.defer();
+
+    this.then(_.bind(function _evaluateThen () {
+        var deferred = q.defer();
+        this.promises.push(deferred.promise);
+        this.out('Promised: Evaluate', 5, 'debug');
 
         this.page.evaluate(method, _.bind(function _callback (callback, error, value) {
             this.call(callback, error, value);
 
-            p.resolve();
+            this.out('Resolved: Evaluate', 5, 'debug');
+            deferred.resolve();
+            defer.resolve(error, value);
         }, this, callback));
     }, this));
+
+    return defer.promise;
 }
 
 Jango.prototype.run = function run (callback) {
-    this.out('Run ' + this.steps.length + ' steps ' + arguments.callee.caller.name);
+    this.out('Run ' + this.steps.length + ' steps ' + arguments.callee.caller.name, 5);
+
+    var defer = q.defer();
 
     callback = callback || _.bind(function () {
-        // this.exit(1);
+        this.exit(1);
     }, this);
 
     this.boot(_.bind(function _boot () {
         this.out('Go time', 2, 'success');
 
+        // Go through steps one by one, in series
         async.forEachSeries(
             this.steps,
             _.bind(function _stepsForEach (step, callback) {
                 this.step++;
 
+                console.log(' ');
                 this.out('On step ' + this.step, 2, 'info');
                 step.call(this);
-                this.out('  Step ' + this.step + ' called', 2, 'success');
 
                 this.out('About to wait on ' + this.promises.length.toString() + ' promises', 5, 'debug');
 
                 // Wait for all promises promised by this step to be resolved (any status)
                 q.allResolved(this.promises).then(_.bind(function (promises) {
+                    // Reset the promise array
                     this.promises = [];
 
+                    // Sanity check
                     promises.forEach(_.bind(function (promise, index) {
                         if (promise.isFulfilled()) {
                             this.out('+ A fullfilled promise that we waited for', 5, 'debug')
                         } else {
                             this.out('- Promise not fulfilled', 5, 'debug');
-                            this.promises.push(promise);
                         }
-
-                        // delete this.promises[index - 1];
                     }, this));
 
                     this.out('We shall now continue...', 5, 'debug');
@@ -255,15 +331,18 @@ Jango.prototype.run = function run (callback) {
                 this.out('Finished', 2, 'success');
 
                 this.call(callback);
+                defer.resolve();
             }, this)
         );
     }, this));
+
+    return defer.promise;
 }
 
 Jango.prototype.exit = function exit (code, callback) {
     this.phantom.exit(code);
 
-    this.call(callback);
+    return this.call(callback);
 }
 
 module.exports = new Jango;

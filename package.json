@@ -6,6 +6,7 @@
   "description": "A lightweight wrapper around node-phantom something like CasperJS",
   "version": "0.0.1",
   "homepage": "https://github.com/ShonM/jango",
+  "main": "jango.js",
   "repository": {
     "type": "git",
     "url": "git://github.com/ShonM/jango.git"

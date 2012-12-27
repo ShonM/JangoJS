@@ -102,9 +102,9 @@ Jango.prototype.boot = function boot (callback) {
 
             // Invoked when a navigation event happens
             page.onNavigationRequested = _.bind(function _onNavigationRequested (request) {
-                var url = request[0];
-                    type = request[1];
-                    locked = request[2];
+                var url = request[0],
+                    type = request[1],
+                    locked = request[2],
                     main = request[3];
 
                 // Whenever the current request is a main frame request

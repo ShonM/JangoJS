@@ -1,5 +1,5 @@
 var should = require('should'),
-    jango  = require('./../jango')
+    jango = require('./../jango')
 
 describe('Jango', function () {
     describe('#boot()', function () {
@@ -21,42 +21,48 @@ describe('Jango', function () {
     describe('#then()', function () {
         it('should then without error', function (done) {
             jango.then(function () {
-                done()
+                // Empty function
             })
 
-            done()
+            jango.run(function () {
+                done()
+            })
         })
     })
 
     describe('#wait()', function () {
         it('should wait without error', function (done) {
-            jango.wait(1000, function () {
+            jango.wait(1000)
+
+            jango.run(function () {
                 done()
             })
-
-            done()
         })
     })
 
     describe('#open()', function () {
+        this.timeout(10000)
+
         it('should open without error', function (done) {
-            jango.open('http://www.google.com/', function () {
+            jango.open('http://www.google.com/')
+
+            jango.run(function () {
                 done()
             })
-
-            done()
         })
     })
 
     describe('#evaluate()', function () {
+        this.timeout(10000)
+
         it('should evaluate without error', function (done) {
             jango.evaluate(function () {
                 console.log('evaluate')
-            }, function () {
-                done()
             })
 
-            done()
+            jango.run(function () {
+                done()
+            })
         })
     })
 })

@@ -43,7 +43,7 @@ jango.then(function after () {
     setTimeout(function setting () {
         console.log('Setting val');
         this.val = true;
-    }.bind(this), 1000);
+    }.bind(this), 3000);
 }.bind(this));
 
 // Wait until this function returns something
@@ -54,7 +54,7 @@ jango.wait(function wait2 () {
     return that.val;
 }.bind(this), function wait2callback () {
     console.log('Waited for val', that.val);
-}, 2000);
+}, 5000);
 
 // This will time out because val2 is never set
 jango.wait(function wait3 () {

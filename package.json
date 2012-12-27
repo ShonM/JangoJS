@@ -11,6 +11,7 @@
     "url": "git://github.com/ShonM/jango.git"
   },
   "dependencies": {
+    "node-phantom": "git+https://github.com/ShonM/node-phantom.git",
     "q": "~0.8.11",
     "async": "~0.1.22",
     "cli-color": "~0.2.1",

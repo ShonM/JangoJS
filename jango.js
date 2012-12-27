@@ -3,7 +3,7 @@ var phantom     = require('node-phantom'),
     clc         = require('cli-color'),
     events      = require('events'),
     async       = require('async'),
-    _ =         require('lodash'),
+    _           = require('lodash'),
     q           = require('q');
 
 function Jango () {

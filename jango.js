@@ -303,7 +303,6 @@ Jango.prototype.run = function run (callback) {
             _.bind(function _stepsForEach (step, callback) {
                 this.step++;
 
-                console.log(' ');
                 this.out('On step ' + this.step, 2, 'info');
                 step.call(this);
 

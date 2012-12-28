@@ -367,10 +367,8 @@ Jango.prototype.run = function run (callback) {
     return defer.promise
 }
 
-Jango.prototype.exit = function exit (code, callback) {
-    this.phantom.exit(code)
-
-    return this.call(callback)
+Jango.prototype.exit = function exit (code) {
+    return this.phantom.exit(code || 0)
 }
 
 module.exports = new Jango

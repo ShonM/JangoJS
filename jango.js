@@ -111,8 +111,14 @@ Jango.prototype.boot = function boot (callback) {
                 if (main) {
                     var deferred = q.defer()
 
+                    // Set a generous timeout to reject this deferred
+                    var timeout = setTimeout(_.bind(function () {
+                        deferred.reject('Timed out')
+                    }, this), 10000)
+
                     // Resolve this deferred when the URL is changed (the navigation request is fulfilled - NOT loading complete!)
                     this.once('onUrlChanged', function () {
+                        clearTimeout(timeout)
                         this.out('Resolved: onNavigationRequested: ' + url, 5, 'debug')
                         deferred.resolve()
                     })
@@ -129,8 +135,14 @@ Jango.prototype.boot = function boot (callback) {
 
                 var deferred = q.defer()
 
+                // Set a generous timeout to reject this deferred
+                var timeout = setTimeout(_.bind(function () {
+                    deferred.reject('Timed out')
+                }, this), 10000)
+
                 // Resolve this deferred when loading is finished
                 this.once('onLoadFinished', function () {
+                    clearTimeout(timeout)
                     this.out('Resolved: onUrlChanged', 5, 'debug')
                     deferred.resolve()
                 })
@@ -235,9 +247,13 @@ Jango.prototype.open = function open (url, callback) {
         this.promises.push(deferred.promise)
         this.out('Promised: Open', 5, 'debug')
 
-        this.page.open(url, _.bind(function _pageOpen (error, status) {
-            this.page.onLoadFinished(status)
+        var timeout = setTimeout(_.bind(function () {
+            deferred.reject('Timed out')
+        }, this), 10000)
 
+        this.page.open(url, _.bind(function _pageOpen (error, status) {
+            clearTimeout(timeout)
+            this.page.onLoadFinished(status)
             this.call(callback, this.response, error, status)
 
             if (error || status !== 'success') {
@@ -246,7 +262,6 @@ Jango.prototype.open = function open (url, callback) {
                 this.emit('onUrlChanged', status)
 
                 this.out('Rejected: Open', 5, 'debug')
-
                 deferred.reject(error)
                 defer.reject(error)
 
@@ -276,7 +291,13 @@ Jango.prototype.evaluate = function evaluate (method, callback) {
         this.page.evaluate(method, _.bind(function _callback (callback, error, value) {
             this.call(callback, error, value)
 
-            // TODO: Reject if error
+            if (error) {
+                this.out('Rejected: Evaluate', 5, 'debug')
+                deferred.reject(error)
+                defer.reject(error)
+
+                return
+            }
 
             this.out('Resolved: Evaluate', 5, 'debug')
             deferred.resolve()

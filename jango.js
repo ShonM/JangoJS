@@ -48,10 +48,10 @@ Jango.prototype.out = function out (message, level, style) {
     if (level <= this.argv.level) {
         style = style || 'debug';
 
-        return console.log(this.styles[style]('Jango: ') + message);
+        console.log(this.styles[style]('Jango: ') + message);
     }
 
-    return false;
+    return this;
 }
 
 // Shorthand: If callable, acts like callback.call(this, [args, ...])
@@ -113,7 +113,7 @@ Jango.prototype.boot = function boot (callback) {
 
                     // Resolve this deferred when the URL is changed (the navigation request is fulfilled - NOT loading complete!)
                     this.once('onUrlChanged', function () {
-                        this.out('Resolved: onNavigationRequested', 5, 'debug');
+                        this.out('Resolved: onNavigationRequested: ' + url, 5, 'debug');
                         deferred.resolve();
                     });
 
@@ -124,7 +124,7 @@ Jango.prototype.boot = function boot (callback) {
 
             // Invoked when the URL changes, e.g. as it navigates away from the current URL
             page.onUrlChanged = _.bind(function _onUrlChanged (url) {
-                this.out('Emit onUrlChanged', 5, 'debug');
+                this.out('Emit onUrlChanged: ' + url, 5, 'debug');
                 this.emit('onUrlChanged', url);
 
                 var deferred = q.defer();
@@ -139,29 +139,15 @@ Jango.prototype.boot = function boot (callback) {
                 this.promises.push(deferred.promise);
             }, this);
 
-            // Invoked when the page starts the loading
-            page.onLoadStarted = _.bind(function _onLoadStarted () {
-                var deferred = q.defer();
-
-                // Resolve this deferred when loading is finished
-                this.once('onLoadFinished', function () {
-                    this.out('Resolved: onLoadStarted', 5, 'debug');
-                    deferred.resolve();
-                });
-
-                this.out('Promised: onLoadStarted', 5, 'debug')
-                this.promises.push(deferred.promise);
-            }, this);
-
             // Invoked when the page finishes the loading
             page.onLoadFinished = _.bind(function _onLoadFinished (status) {
-                this.out('Emit onLoadFinished', 5, 'debug');
+                this.out('Emit onLoadFinished: ' + status, 5, 'debug');
                 this.emit('onLoadFinished', status);
             }, this);
 
             // Invoked when there is a JavaScript console message on the web page
             page.onConsoleMessage = _.bind(function _onConsoleMessage (message, line, source) {
-                this.out('Emit onConsoleMessage', 5, 'debug');
+                this.out('Emit onConsoleMessage: ' + message, 5, 'debug');
                 this.emit('onConsoleMessage', message, line, source);
             }, this);
 
@@ -254,6 +240,19 @@ Jango.prototype.open = function open (url, callback) {
 
             this.call(callback, this.response, error, status);
 
+            if (error || status !== 'success') {
+                // This is a fake since it will never fire otherwise
+                // onNavigationRequested will only resolve when this is fired
+                this.emit('onUrlChanged', status);
+
+                this.out('Rejected: Open', 5, 'debug');
+
+                deferred.reject(error);
+                defer.reject(error);
+
+                return;
+            }
+
             this.out('Resolved: Open', 5, 'debug');
             deferred.resolve();
             defer.resolve();
@@ -263,6 +262,7 @@ Jango.prototype.open = function open (url, callback) {
     return defer.promise;
 }
 
+// then() wrapper to run code on the client, optionally returning values to a Jango-scoped callback
 Jango.prototype.evaluate = function evaluate (method, callback) {
     this.out('Evaluate ' + arguments.callee.caller.name, 5);
 
@@ -276,6 +276,8 @@ Jango.prototype.evaluate = function evaluate (method, callback) {
         this.page.evaluate(method, _.bind(function _callback (callback, error, value) {
             this.call(callback, error, value);
 
+            // TODO: Reject if error
+
             this.out('Resolved: Evaluate', 5, 'debug');
             deferred.resolve();
             defer.resolve(error, value);
@@ -283,6 +285,47 @@ Jango.prototype.evaluate = function evaluate (method, callback) {
     }, this));
 
     return defer.promise;
+}
+
+// Calls a callback once all promises are resolved - will wait for new promises made while waiting (recursive)
+Jango.prototype.allResolved = function allResolved (callback) {
+    this.out('About to wait on ' + this.promises.length.toString() + ' promises', 5, 'debug');
+
+    var i = setInterval(_.bind(function () {
+        this.promises.forEach(_.bind(function (promise, index) {
+            if (promise.isFulfilled()) {
+                this.out('√ Promise fulfilled', 5, 'debug');
+            } else if (promise.isRejected()) {
+                this.out('x Promise rejected: ' + promise.valueOf().exception, 5, 'debug');
+            } else {
+                this.out('o Promise not yet fulfilled/rejected', 5, 'debug');
+            }
+        }, this));
+    }, this), 5000);
+
+    q.allResolved(this.promises).then(_.bind(function (promises) {
+        var recurse = false;
+
+        // Any promises that are not yet resolved or rejected means we should recurse
+        promises.forEach(_.bind(function (promise, index) {
+            if (! promise.isFulfilled() && ! promise.isRejected()) {
+                recurse = true;
+            }
+        }, this));
+
+        if (recurse) {
+            clearInterval(i);
+
+            this.out('Recursing allResolved', 5, 'info');
+            this.allResolved(function () {
+                callback();
+            });
+        } else {
+            clearInterval(i);
+
+            callback();
+        }
+    }, this));
 }
 
 Jango.prototype.run = function run (callback) {
@@ -297,7 +340,7 @@ Jango.prototype.run = function run (callback) {
     this.boot(_.bind(function _boot () {
         this.out('Go time', 2, 'success');
 
-        // Go through steps one by one, in series
+        // Go through steps in series
         async.forEachSeries(
             this.steps,
             _.bind(function _stepsForEach (step, callback) {
@@ -306,22 +349,8 @@ Jango.prototype.run = function run (callback) {
                 this.out('On step ' + this.step, 2, 'info');
                 step.call(this);
 
-                this.out('About to wait on ' + this.promises.length.toString() + ' promises', 5, 'debug');
-
-                // Wait for all promises promised by this step to be resolved (any status)
-                q.allResolved(this.promises).then(_.bind(function (promises) {
-                    // Reset the promise array
+                this.allResolved(_.bind(function () {
                     this.promises = [];
-
-                    // Sanity check
-                    promises.forEach(_.bind(function (promise, index) {
-                        if (promise.isFulfilled()) {
-                            this.out('+ A fullfilled promise that we waited for', 5, 'debug')
-                        } else {
-                            this.out('- Promise not fulfilled', 5, 'debug');
-                        }
-                    }, this));
-
                     this.out('We shall now continue...', 5, 'debug');
                     callback();
                 }, this));

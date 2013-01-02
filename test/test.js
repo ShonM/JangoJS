@@ -108,9 +108,9 @@ describe('Jango', function () {
     })
 
     describe('#evaluate()', function () {
-        this.timeout(5000)
-
         it('should evaluate without error', function (done) {
+            this.timeout(2000)
+
             jango.evaluate(function () {
                 console.log('evaluate')
             })
@@ -121,6 +121,8 @@ describe('Jango', function () {
         })
 
         it('should wait for navigation', function (done) {
+            this.timeout(10000)
+
             jango.open('http://google.fr/')
 
             jango.evaluate(function () {

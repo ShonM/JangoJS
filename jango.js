@@ -251,7 +251,7 @@ Jango.prototype.wait = function wait (on, callback, timeout) {
 
 // then() wrapper that will open a page
 Jango.prototype.open = function open (url, callback) {
-    this.out('Open ' + arguments.callee.caller.name, 5)
+    this.out('Open (' + url + ') ' + arguments.callee.caller.name, 5)
 
     var defer = q.defer()
 

@@ -1,4 +1,4 @@
-Jango
+JangoJS
 =====
 
 A very basic example while Jango is still under heavy development;

@@ -36,9 +36,9 @@ describe('Jango', function () {
         })
 
         it('should create a page if there isn\'t one', function (done) {
-            jango.page = undefined
+            jango.page = false
 
-            should.strictEqual(undefined, jango.page)
+            should.strictEqual(false, jango.page)
 
             jango.run(function () {
                 this.page.should.be.a('object')

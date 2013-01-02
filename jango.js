@@ -81,7 +81,6 @@ Jango.prototype.bootPhantom = function boot (callback) {
         this.phantom = phantom
 
         this.call(callback, phantom)
-
         defer.resolve()
     }, this))
 
@@ -177,7 +176,6 @@ Jango.prototype.createPage = function page (callback) {
         }, this)
 
         this.call(callback, phantom)
-
         defer.resolve()
     }, this))
 }
@@ -322,6 +320,8 @@ Jango.prototype.evaluate = function evaluate (method, callback) {
 Jango.prototype.allResolved = function allResolved (callback) {
     this.out('About to wait on ' + this.promises.length.toString() + ' promises', 5, 'debug')
 
+    var defer = q.defer()
+
     var i = setInterval(_.bind(function () {
         this.promises.forEach(_.bind(function (promise, index) {
             if (promise.isFulfilled()) {
@@ -350,13 +350,17 @@ Jango.prototype.allResolved = function allResolved (callback) {
             this.out('Recursing allResolved', 5, 'info')
             this.allResolved(function () {
                 callback()
+                defer.resolve()
             })
         } else {
             clearInterval(i)
 
             callback()
+            defer.resolve()
         }
     }, this))
+
+    return defer.promise
 }
 
 Jango.prototype.run = function run (callback) {
@@ -371,7 +375,7 @@ Jango.prototype.run = function run (callback) {
     this.bootPhantom(_.bind(function _boot () {
         var pageDefer = q.defer()
 
-        if (typeof this.page === 'undefined') {
+        if (! this.page) {
             this.createPage(function _page () {
                 pageDefer.resolve()
             })

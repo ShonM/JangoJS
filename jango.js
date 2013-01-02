@@ -369,7 +369,17 @@ Jango.prototype.run = function run (callback) {
     }, this)
 
     this.bootPhantom(_.bind(function _boot () {
-        this.createPage(_.bind(function _page () {
+        var pageDefer = q.defer()
+
+        if (typeof this.page === 'undefined') {
+            this.createPage(function _page () {
+                pageDefer.resolve()
+            })
+        } else {
+            pageDefer.resolve()
+        }
+
+        pageDefer.promise.then(_.bind(function _pageDefer () {
             this.out('Go time', 2, 'success')
 
             // Go through steps in series

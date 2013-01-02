@@ -2,3 +2,4 @@
 --require should
 --reporter spec
 --ui bdd
+--slow 1500

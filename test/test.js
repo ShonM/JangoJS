@@ -34,6 +34,18 @@ describe('Jango', function () {
                 done()
             })
         })
+
+        it('should create a page if there isn\'t one', function (done) {
+            jango.page = undefined
+
+            should.strictEqual(undefined, jango.page)
+
+            jango.run(function () {
+                this.page.should.be.a('object')
+
+                done()
+            })
+        })
     })
 
     describe('#then()', function () {

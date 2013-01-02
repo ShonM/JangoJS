@@ -2,10 +2,28 @@ var should = require('should'),
     jango = require('./../jango')
 
 describe('Jango', function () {
-    describe('#boot()', function () {
-        it('should boot without error', function (done) {
-            jango.boot(function () {
+    describe('#bootPhantom()', function () {
+        it('should boot Phantom without error', function (done) {
+            jango.bootPhantom(function () {
                 done()
+            })
+        })
+    })
+
+    describe('#createPage()', function () {
+        it('should create a page without error', function (done) {
+            jango.createPage(function () {
+                done()
+            })
+        })
+
+        it('should allow many pages', function (done) {
+            jango.createPage(function () {
+                jango.createPage(function () {
+                    jango.createPage(function () {
+                        done()
+                    })
+                })
             })
         })
     })

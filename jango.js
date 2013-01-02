@@ -64,8 +64,8 @@ Jango.prototype.call = function call (callback) {
 }
 
 // Boots a Phantom instance and creates a page, hooking up some events
-Jango.prototype.boot = function boot (callback) {
-    this.out('Booting', 1, 'info')
+Jango.prototype.bootPhantom = function boot (callback) {
+    this.out('Booting Phantom', 1, 'info')
 
     var defer = q.defer()
 
@@ -80,59 +80,48 @@ Jango.prototype.boot = function boot (callback) {
         this.out('Got Phantom', 2, 'info')
         this.phantom = phantom
 
-        // Create a Phantom page
-        phantom.createPage(_.bind(function _phantomCreatePage (error, page) {
-            if (error) {
-                defer.reject('Phantom error: ' + error)
-                this.out('Phantom error: ' + error, 0, 'error')
-                this.exit()
+        this.call(callback, phantom)
+
+        defer.resolve()
+    }, this))
+
+    return defer.promise
+}
+
+// Create a Phantom webpage
+Jango.prototype.createPage = function page (callback) {
+    this.out('Creating a page', 1, 'info')
+
+    var defer = q.defer()
+
+    this.phantom.createPage(_.bind(function _phantomCreatePage (error, page) {
+        if (error) {
+            defer.reject('Phantom error: ' + error)
+            this.out('Phantom error: ' + error, 0, 'error')
+            this.exit()
+        }
+
+        this.out('Got Page', 2, 'info')
+        this.page = page
+
+        // Invoked when the a resource requested by the page is received
+        page.onResourceReceived = _.bind(function _onResourceReceived (resource) {
+            if (resource.stage !== 'end' || resource.url !== this.requestUrl) {
+                return
+            } else if (typeof resource == 'object' && /^http/i.test(resource.url)) {
+                this.response = resource
             }
+        }, this)
 
-            this.out('Got Page', 2, 'info')
-            this.page = page
+        // Invoked when a navigation event happens
+        page.onNavigationRequested = _.bind(function _onNavigationRequested (request) {
+            var url = request[0],
+                type = request[1],
+                locked = request[2],
+                main = request[3]
 
-            // Invoked when the a resource requested by the page is received
-            page.onResourceReceived = _.bind(function _onResourceReceived (resource) {
-                if (resource.stage !== 'end' || resource.url !== this.requestUrl) {
-                    return
-                } else if (typeof resource == 'object' && /^http/i.test(resource.url)) {
-                    this.response = resource
-                }
-            }, this)
-
-            // Invoked when a navigation event happens
-            page.onNavigationRequested = _.bind(function _onNavigationRequested (request) {
-                var url = request[0],
-                    type = request[1],
-                    locked = request[2],
-                    main = request[3]
-
-                // Whenever the current request is a main frame request
-                if (main) {
-                    var deferred = q.defer()
-
-                    // Set a generous timeout to reject this deferred
-                    var timeout = setTimeout(_.bind(function () {
-                        deferred.reject('Timed out')
-                    }, this), 10000)
-
-                    // Resolve this deferred when the URL is changed (the navigation request is fulfilled - NOT loading complete!)
-                    this.once('onUrlChanged', function () {
-                        clearTimeout(timeout)
-                        this.out('Resolved: onNavigationRequested: ' + url, 5, 'debug')
-                        deferred.resolve()
-                    })
-
-                    this.out('Promised: onNavigationRequested', 5, 'debug')
-                    this.promises.push(deferred.promise)
-                }
-            }, this)
-
-            // Invoked when the URL changes, e.g. as it navigates away from the current URL
-            page.onUrlChanged = _.bind(function _onUrlChanged (url) {
-                this.out('Emit onUrlChanged: ' + url, 5, 'debug')
-                this.emit('onUrlChanged', url)
-
+            // Whenever the current request is a main frame request
+            if (main) {
                 var deferred = q.defer()
 
                 // Set a generous timeout to reject this deferred
@@ -140,36 +129,57 @@ Jango.prototype.boot = function boot (callback) {
                     deferred.reject('Timed out')
                 }, this), 10000)
 
-                // Resolve this deferred when loading is finished
-                this.once('onLoadFinished', function () {
+                // Resolve this deferred when the URL is changed (the navigation request is fulfilled - NOT loading complete!)
+                this.once('onUrlChanged', function () {
                     clearTimeout(timeout)
-                    this.out('Resolved: onUrlChanged', 5, 'debug')
+                    this.out('Resolved: onNavigationRequested: ' + url, 5, 'debug')
                     deferred.resolve()
                 })
 
-                this.out('Promised: onUrlChanged', 5, 'debug')
+                this.out('Promised: onNavigationRequested', 5, 'debug')
                 this.promises.push(deferred.promise)
-            }, this)
+            }
+        }, this)
 
-            // Invoked when the page finishes the loading
-            page.onLoadFinished = _.bind(function _onLoadFinished (status) {
-                this.out('Emit onLoadFinished: ' + status, 5, 'debug')
-                this.emit('onLoadFinished', status)
-            }, this)
+        // Invoked when the URL changes, e.g. as it navigates away from the current URL
+        page.onUrlChanged = _.bind(function _onUrlChanged (url) {
+            this.out('Emit onUrlChanged: ' + url, 5, 'debug')
+            this.emit('onUrlChanged', url)
 
-            // Invoked when there is a JavaScript console message on the web page
-            page.onConsoleMessage = _.bind(function _onConsoleMessage (message, line, source) {
-                this.out('Emit onConsoleMessage: ' + message, 5, 'debug')
-                this.emit('onConsoleMessage', message, line, source)
-            }, this)
+            var deferred = q.defer()
 
-            this.call(callback, phantom)
+            // Set a generous timeout to reject this deferred
+            var timeout = setTimeout(_.bind(function () {
+                deferred.reject('Timed out')
+            }, this), 10000)
 
-            defer.resolve()
-        }, this))
+            // Resolve this deferred when loading is finished
+            this.once('onLoadFinished', function () {
+                clearTimeout(timeout)
+                this.out('Resolved: onUrlChanged', 5, 'debug')
+                deferred.resolve()
+            })
+
+            this.out('Promised: onUrlChanged', 5, 'debug')
+            this.promises.push(deferred.promise)
+        }, this)
+
+        // Invoked when the page finishes the loading
+        page.onLoadFinished = _.bind(function _onLoadFinished (status) {
+            this.out('Emit onLoadFinished: ' + status, 5, 'debug')
+            this.emit('onLoadFinished', status)
+        }, this)
+
+        // Invoked when there is a JavaScript console message on the web page
+        page.onConsoleMessage = _.bind(function _onConsoleMessage (message, line, source) {
+            this.out('Emit onConsoleMessage: ' + message, 5, 'debug')
+            this.emit('onConsoleMessage', message, line, source)
+        }, this)
+
+        this.call(callback, phantom)
+
+        defer.resolve()
     }, this))
-
-    return defer.promise
 }
 
 // Pushes a step onto the step queue
@@ -358,31 +368,33 @@ Jango.prototype.run = function run (callback) {
         this.exit(1)
     }, this)
 
-    this.boot(_.bind(function _boot () {
-        this.out('Go time', 2, 'success')
+    this.bootPhantom(_.bind(function _boot () {
+        this.createPage(_.bind(function _page () {
+            this.out('Go time', 2, 'success')
 
-        // Go through steps in series
-        async.forEachSeries(
-            this.steps,
-            _.bind(function _stepsForEach (step, callback) {
-                this.step++
+            // Go through steps in series
+            async.forEachSeries(
+                this.steps,
+                _.bind(function _stepsForEach (step, callback) {
+                    this.step++
 
-                this.out('On step ' + this.step, 2, 'info')
-                step.call(this)
+                    this.out('On step ' + this.step, 2, 'info')
+                    step.call(this)
 
-                this.allResolved(_.bind(function () {
-                    this.promises = []
-                    this.out('We shall now continue...', 5, 'debug')
-                    callback()
-                }, this))
-            }, this),
-            _.bind(function _stepsComplete () {
-                this.out('Finished', 2, 'success')
+                    this.allResolved(_.bind(function () {
+                        this.promises = []
+                        this.out('We shall now continue...', 5, 'debug')
+                        callback()
+                    }, this))
+                }, this),
+                _.bind(function _stepsComplete () {
+                    this.out('Finished', 2, 'success')
 
-                this.call(callback)
-                defer.resolve()
-            }, this)
-        )
+                    this.call(callback)
+                    defer.resolve()
+                }, this)
+            )
+        }, this))
     }, this))
 
     return defer.promise

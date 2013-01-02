@@ -53,7 +53,9 @@ Jango.prototype.out = function out (message, level, style) {
     if (level <= this.argv.level) {
         style = style || 'debug'
 
-        console.log(this.styles[style]('Jango: ') + message)
+        var prefix = (this.context) ? 'Jango::' + this.context + ' ' : 'Jango: '
+
+        console.log(this.styles[style](prefix) + message)
     }
 
     return this

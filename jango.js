@@ -6,7 +6,7 @@ var phantom     = require('node-phantom'),
     _           = require('lodash'),
     q           = require('q')
 
-function Jango () {
+function Jango (options) {
     this.argv = require('optimist')
         .alias('l', 'level').default('level', 0)
         .argv
@@ -14,6 +14,8 @@ function Jango () {
     this.opts = {
         phantom: {}
     }
+
+    this.context = false
 
     this.step = 0
     this.steps = []
@@ -31,6 +33,9 @@ function Jango () {
         'warning': clc.xterm(214),
         'success': clc.xterm(70)
     }
+
+    // Any passed presets are assigned here
+    utils.extend(this, options)
 }
 
 // Jango is one bigass event emitter
